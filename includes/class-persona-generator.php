@@ -78,7 +78,11 @@ class Persona_Generator {
 			),
 			array(
 				'role'    => 'user',
-				'content' => "Based on Ndevr's website and services, provide the three personas.",
+				'content' => sprintf(
+					"Based on %s's website %s, provide the three personas.",
+					get_bloginfo( 'name' ),
+					home_url()
+				),
 			),
 		);
 
