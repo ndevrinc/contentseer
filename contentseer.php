@@ -36,7 +36,7 @@ require_once CONTENTSEER_PATH . 'includes/class-admin-persona.php';
 require_once CONTENTSEER_PATH . 'includes/class-admin-settings.php';
 require_once CONTENTSEER_PATH . 'includes/class-front-end.php';
 require_once CONTENTSEER_PATH . 'includes/class-api.php';
-require_once CONTENTSEER_PATH . 'includes/rest/class-generate.php';
+require_once CONTENTSEER_PATH . 'includes/class-persona-generator.php';
 
 // Initialize the plugin
 function contentseer_init() {
