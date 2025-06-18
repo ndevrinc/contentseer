@@ -26,6 +26,7 @@ class Admin_Settings {
 		add_action( 'admin_init', array( $this, 'create_default_webhook_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_feature_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_api_settings' ) );
+		add_action( 'admin_init', array( $this, 'create_default_site_settings' ) );
 	}
 
 	/**
@@ -82,6 +83,22 @@ class Admin_Settings {
 	}
 
 	/**
+	 * Create default site settings if they don't exist
+	 */
+	public function create_default_site_settings() {
+		// Create default site settings if they don't exist
+		$default_site = array(
+			'contentseer_id' => '',
+		);
+
+		foreach ( $default_site as $option_name => $default_value ) {
+			if ( false === get_option( $option_name ) ) {
+				add_option( $option_name, $default_value );
+			}
+		}
+	}
+
+	/**
 	 * Add a settings page to the WordPress admin menu.
 	 */
 	public function add_settings_page() {
@@ -126,6 +143,16 @@ class Admin_Settings {
 				'type'              => 'boolean',
 				'sanitize_callback' => 'rest_sanitize_boolean',
 				'default'           => true,
+			)
+		);
+
+		// Register site settings
+		register_setting(
+			'contentseer_settings',
+			'contentseer_id',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
 			)
 		);
 
@@ -208,6 +235,23 @@ class Admin_Settings {
 			array( $this, 'render_enable_create_field' ),
 			'contentseer',
 			'contentseer_features_section'
+		);
+
+		// Add the Site Configuration section.
+		add_settings_section(
+			'contentseer_site_section',
+			'Site Configuration',
+			array( $this, 'render_site_section_description' ),
+			'contentseer'
+		);
+
+		// Add the ContentSeer ID field.
+		add_settings_field(
+			'contentseer_id',
+			'ContentSeer Site ID',
+			array( $this, 'render_contentseer_id_field' ),
+			'contentseer',
+			'contentseer_site_section'
 		);
 
 		// Add the Post Types section.
@@ -323,6 +367,22 @@ class Admin_Settings {
 		echo ' Enable content creation features (content generation, topic management, etc.)';
 		echo '</label>';
 		echo '<p class="description">When disabled, content creation features will be hidden from menus and interface.</p>';
+	}
+
+	/**
+	 * Render site section description
+	 */
+	public function render_site_section_description() {
+		echo '<p>Configure your site connection to ContentSeer services.</p>';
+	}
+
+	/**
+	 * Render the ContentSeer ID field.
+	 */
+	public function render_contentseer_id_field() {
+		$contentseer_id = get_option( 'contentseer_id', '' );
+		echo '<input type="text" name="contentseer_id" value="' . esc_attr( $contentseer_id ) . '" class="regular-text" />';
+		echo '<p class="description">Enter your ContentSeer Site ID. This is provided when you connect your site to ContentSeer.</p>';
 	}
 
 	/**
