@@ -27,6 +27,145 @@ class Admin_Settings {
 		add_action( 'admin_init', array( $this, 'create_default_feature_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_api_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_site_settings' ) );
+		add_action( 'wp_ajax_contentseer_request_access', array( $this, 'handle_access_request' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_settings_scripts' ) );
+	}
+
+	/**
+	 * Enqueue scripts for settings page
+	 */
+	public function enqueue_settings_scripts( $hook ) {
+		// Only load on ContentSeer settings page
+		if ( 'settings_page_contentseer' !== $hook ) {
+			return;
+		}
+
+		wp_enqueue_script(
+			'contentseer-settings',
+			CONTENTSEER_URL . 'assets/js/settings.js',
+			array( 'jquery' ),
+			CONTENTSEER_VERSION,
+			true
+		);
+
+		wp_localize_script(
+			'contentseer-settings',
+			'contentSeerSettings',
+			array(
+				'nonce'   => wp_create_nonce( 'contentseer-settings' ),
+				'ajaxurl' => admin_url( 'admin-ajax.php' ),
+			)
+		);
+	}
+
+	/**
+	 * Handle access request AJAX
+	 */
+	public function handle_access_request() {
+		check_ajax_referer( 'contentseer-settings', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Permission denied' );
+			return;
+		}
+
+		$site_name = sanitize_text_field( $_POST['site_name'] );
+		$admin_email = sanitize_email( $_POST['admin_email'] );
+		$site_url = home_url();
+
+		if ( empty( $site_name ) || empty( $admin_email ) ) {
+			wp_send_json_error( 'Site name and admin email are required' );
+			return;
+		}
+
+		// Prepare request data
+		$request_data = array(
+			'site_name'    => $site_name,
+			'site_url'     => $site_url,
+			'admin_email'  => $admin_email,
+			'wp_version'   => get_bloginfo( 'version' ),
+			'plugin_version' => CONTENTSEER_VERSION,
+			'request_type' => 'access_request',
+		);
+
+		// Send request to ContentSeer dashboard API
+		$response = wp_remote_post(
+			'https://dashboard.contentseer.io/api/v1/sites/request-access',
+			array(
+				'headers' => array(
+					'Content-Type' => 'application/json',
+					'User-Agent'   => 'ContentSeer-WordPress/' . CONTENTSEER_VERSION,
+				),
+				'body'    => wp_json_encode( $request_data ),
+				'timeout' => 30,
+			)
+		);
+
+		if ( is_wp_error( $response ) ) {
+			wp_send_json_error( 'Failed to connect to ContentSeer: ' . $response->get_error_message() );
+			return;
+		}
+
+		$response_code = wp_remote_retrieve_response_code( $response );
+		$body = wp_remote_retrieve_body( $response );
+		$data = json_decode( $body, true );
+
+		if ( $response_code !== 200 ) {
+			$error_message = isset( $data['message'] ) ? $data['message'] : 'Unknown error occurred';
+			wp_send_json_error( 'Request failed: ' . $error_message );
+			return;
+		}
+
+		if ( ! isset( $data['success'] ) || ! $data['success'] ) {
+			$error_message = isset( $data['message'] ) ? $data['message'] : 'Access request failed';
+			wp_send_json_error( $error_message );
+			return;
+		}
+
+		// If successful, save the credentials
+		if ( isset( $data['credentials'] ) ) {
+			$credentials = $data['credentials'];
+			
+			// Update all the settings with the received credentials
+			update_option( 'contentseer_id', sanitize_text_field( $credentials['site_id'] ) );
+			update_option( 'contentseer_api_key', sanitize_text_field( $credentials['api_key'] ) );
+			update_option( 'contentseer_api_secret', sanitize_text_field( $credentials['api_secret'] ) );
+			
+			// Update webhook URLs if provided
+			if ( isset( $credentials['webhooks'] ) ) {
+				$webhooks = $credentials['webhooks'];
+				
+				if ( isset( $webhooks['topics'] ) ) {
+					update_option( 'contentseer_topics_webhook_url', esc_url_raw( $webhooks['topics'] ) );
+				}
+				if ( isset( $webhooks['blog_titles'] ) ) {
+					update_option( 'contentseer_blog_titles_webhook_url', esc_url_raw( $webhooks['blog_titles'] ) );
+				}
+				if ( isset( $webhooks['content_generation'] ) ) {
+					update_option( 'contentseer_content_generation_webhook_url', esc_url_raw( $webhooks['content_generation'] ) );
+				}
+				if ( isset( $webhooks['content_analysis'] ) ) {
+					update_option( 'contentseer_content_analysis_webhook_url', esc_url_raw( $webhooks['content_analysis'] ) );
+				}
+				if ( isset( $webhooks['content_sync'] ) ) {
+					update_option( 'contentseer_content_sync_webhook_url', esc_url_raw( $webhooks['content_sync'] ) );
+				}
+			}
+
+			wp_send_json_success(
+				array(
+					'message' => 'Access granted! Your site has been successfully connected to ContentSeer.',
+					'site_id' => $credentials['site_id'],
+				)
+			);
+		} else {
+			wp_send_json_success(
+				array(
+					'message' => 'Access request submitted successfully. You will receive an email when your request is approved.',
+					'pending' => true,
+				)
+			);
+		}
 	}
 
 	/**
@@ -381,8 +520,8 @@ class Admin_Settings {
 	 */
 	public function render_contentseer_id_field() {
 		$contentseer_id = get_option( 'contentseer_id', '' );
-		echo '<input type="text" name="contentseer_id" value="' . esc_attr( $contentseer_id ) . '" class="regular-text" />';
-		echo '<p class="description">Enter your ContentSeer Site ID. This is provided when you connect your site to ContentSeer.</p>';
+		echo '<input type="text" name="contentseer_id" value="' . esc_attr( $contentseer_id ) . '" class="regular-text" readonly />';
+		echo '<p class="description">Your ContentSeer Site ID. This is automatically set when you request access.</p>';
 	}
 
 	/**
@@ -484,34 +623,103 @@ class Admin_Settings {
 	 * Render the settings page.
 	 */
 	public function render_settings_page() {
-		$api_key    = get_option( 'contentseer_api_key' );
-		$api_secret = get_option( 'contentseer_api_secret' );
-		$site_url   = home_url();
+		$api_key        = get_option( 'contentseer_api_key' );
+		$api_secret     = get_option( 'contentseer_api_secret' );
+		$contentseer_id = get_option( 'contentseer_id' );
+		$site_url       = home_url();
+		$is_connected   = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'ContentSeer Settings', 'contentseer' ); ?></h1>
 			
+			<?php if ( ! $is_connected ) : ?>
+				<div class="card" style="margin-bottom: 20px;">
+					<h2><?php esc_html_e( 'Get Started with ContentSeer', 'contentseer' ); ?></h2>
+					<p><?php esc_html_e( 'Welcome to ContentSeer! To get started, you need to request access to connect your site to our services.', 'contentseer' ); ?></p>
+					
+					<div id="access-request-form">
+						<table class="form-table">
+							<tr>
+								<th scope="row">
+									<label for="site_name"><?php esc_html_e( 'Site Name', 'contentseer' ); ?></label>
+								</th>
+								<td>
+									<input type="text" id="site_name" class="regular-text" value="<?php echo esc_attr( get_bloginfo( 'name' ) ); ?>" />
+									<p class="description"><?php esc_html_e( 'The name of your website.', 'contentseer' ); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="admin_email"><?php esc_html_e( 'Admin Email', 'contentseer' ); ?></label>
+								</th>
+								<td>
+									<input type="email" id="admin_email" class="regular-text" value="<?php echo esc_attr( get_option( 'admin_email' ) ); ?>" />
+									<p class="description"><?php esc_html_e( 'Email address for account notifications and support.', 'contentseer' ); ?></p>
+								</td>
+							</tr>
+							<tr>
+								<th scope="row">
+									<label for="site_url"><?php esc_html_e( 'Site URL', 'contentseer' ); ?></label>
+								</th>
+								<td>
+									<input type="url" id="site_url" class="regular-text" value="<?php echo esc_attr( $site_url ); ?>" readonly />
+									<p class="description"><?php esc_html_e( 'Your website URL (automatically detected).', 'contentseer' ); ?></p>
+								</td>
+							</tr>
+						</table>
+						
+						<p class="submit">
+							<button type="button" id="request-access-btn" class="button button-primary button-large">
+								<?php esc_html_e( 'Request Access to ContentSeer', 'contentseer' ); ?>
+							</button>
+						</p>
+						
+						<div id="access-request-status" style="display: none; margin-top: 15px;"></div>
+					</div>
+					
+					<div class="notice notice-info inline">
+						<p>
+							<strong><?php esc_html_e( 'What happens next?', 'contentseer' ); ?></strong><br>
+							<?php esc_html_e( '1. We\'ll review your request and set up your account', 'contentseer' ); ?><br>
+							<?php esc_html_e( '2. You\'ll receive an email with your account details', 'contentseer' ); ?><br>
+							<?php esc_html_e( '3. Your site will be automatically configured with the necessary credentials', 'contentseer' ); ?><br>
+							<?php esc_html_e( '4. You can start using ContentSeer features immediately', 'contentseer' ); ?>
+						</p>
+					</div>
+				</div>
+			<?php else : ?>
+				<div class="card">
+					<h2><?php esc_html_e( 'Connection Status', 'contentseer' ); ?></h2>
+					<div class="notice notice-success inline">
+						<p>
+							<strong><?php esc_html_e( 'Your site is connected to ContentSeer!', 'contentseer' ); ?></strong><br>
+							<?php esc_html_e( 'Site ID: ', 'contentseer' ); ?><code><?php echo esc_html( $contentseer_id ); ?></code>
+						</p>
+					</div>
+				</div>
+			<?php endif; ?>
+			
 			<div class="card">
 				<h2><?php esc_html_e( 'API Credentials', 'contentseer' ); ?></h2>
-				<p><?php esc_html_e( 'Use these credentials to connect your WordPress site to ContentSeer.', 'contentseer' ); ?></p>
+				<p><?php esc_html_e( 'These credentials are automatically configured when you request access.', 'contentseer' ); ?></p>
 				
 				<table class="form-table">
 					<tr>
 						<th scope="row"><?php esc_html_e( 'API Key', 'contentseer' ); ?></th>
 						<td>
-							<input type="text" class="regular-text" value="<?php echo esc_attr( $api_key ); ?>" readonly />
+							<input type="text" class="regular-text" value="<?php echo esc_attr( $api_key ? str_repeat( '*', 20 ) . substr( $api_key, -8 ) : 'Not configured' ); ?>" readonly />
 						</td>
 					</tr>
 					<tr>
 						<th scope="row"><?php esc_html_e( 'API Secret', 'contentseer' ); ?></th>
 						<td>
-							<input type="text" class="regular-text" value="<?php echo esc_attr( $api_secret ); ?>" readonly />
+							<input type="text" class="regular-text" value="<?php echo esc_attr( $api_secret ? str_repeat( '*', 40 ) . substr( $api_secret, -8 ) : 'Not configured' ); ?>" readonly />
 						</td>
 					</tr>
 				</table>
 				
 				<p class="description">
-					<?php esc_html_e( 'Keep these credentials secure. They are used to authenticate API requests between your site and ContentSeer.', 'contentseer' ); ?>
+					<?php esc_html_e( 'These credentials are used to authenticate API requests between your site and ContentSeer.', 'contentseer' ); ?>
 				</p>
 			</div>
 
@@ -574,6 +782,58 @@ class Admin_Settings {
 				?>
 			</form>
 		</div>
+		
+		<script>
+		jQuery(document).ready(function($) {
+			$('#request-access-btn').on('click', function() {
+				var $button = $(this);
+				var $status = $('#access-request-status');
+				
+				var siteName = $('#site_name').val().trim();
+				var adminEmail = $('#admin_email').val().trim();
+				
+				if (!siteName || !adminEmail) {
+					$status.html('<div class="notice notice-error inline"><p>Please fill in all required fields.</p></div>').show();
+					return;
+				}
+				
+				$button.prop('disabled', true).text('Requesting Access...');
+				$status.html('<div class="notice notice-info inline"><p>Sending request to ContentSeer...</p></div>').show();
+				
+				$.ajax({
+					url: contentSeerSettings.ajaxurl,
+					method: 'POST',
+					data: {
+						action: 'contentseer_request_access',
+						site_name: siteName,
+						admin_email: adminEmail,
+						nonce: contentSeerSettings.nonce
+					},
+					success: function(response) {
+						if (response.success) {
+							if (response.data.pending) {
+								$status.html('<div class="notice notice-info inline"><p>' + response.data.message + '</p></div>');
+							} else {
+								$status.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
+								// Reload the page after a short delay to show the updated connection status
+								setTimeout(function() {
+									location.reload();
+								}, 2000);
+							}
+						} else {
+							$status.html('<div class="notice notice-error inline"><p>Error: ' + response.data + '</p></div>');
+						}
+					},
+					error: function() {
+						$status.html('<div class="notice notice-error inline"><p>Failed to send request. Please try again.</p></div>');
+					},
+					complete: function() {
+						$button.prop('disabled', false).text('Request Access to ContentSeer');
+					}
+				});
+			});
+		});
+		</script>
 		<?php
 	}
 }

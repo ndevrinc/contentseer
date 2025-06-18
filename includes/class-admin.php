@@ -22,6 +22,38 @@ class Admin {
 	 */
 	private function init_hooks() {
 		add_action( 'admin_menu', array( $this, 'register_admin_menu' ) );
+		add_action( 'admin_notices', array( $this, 'show_connection_notice' ) );
+	}
+
+	/**
+	 * Show connection notice if not connected
+	 */
+	public function show_connection_notice() {
+		// Only show on ContentSeer pages
+		$screen = get_current_screen();
+		if ( ! $screen || strpos( $screen->id, 'contentseer' ) === false ) {
+			return;
+		}
+
+		$contentseer_id = get_option( 'contentseer_id', '' );
+		$api_key = get_option( 'contentseer_api_key', '' );
+		$api_secret = get_option( 'contentseer_api_secret', '' );
+		
+		$is_connected = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
+		
+		if ( ! $is_connected && $screen->id !== 'settings_page_contentseer' ) {
+			?>
+			<div class="notice notice-warning">
+				<p>
+					<strong><?php esc_html_e( 'ContentSeer Setup Required', 'contentseer' ); ?></strong><br>
+					<?php esc_html_e( 'Your site is not yet connected to ContentSeer. Please request access to get started.', 'contentseer' ); ?>
+					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+						<?php esc_html_e( 'Request Access', 'contentseer' ); ?>
+					</a>
+				</p>
+			</div>
+			<?php
+		}
 	}
 
 	/**
@@ -113,7 +145,7 @@ class Admin {
 					<p>
 						<strong><?php esc_html_e( 'No features enabled', 'contentseer' ); ?></strong><br>
 						<?php esc_html_e( 'Please enable at least one ContentSeer feature in the settings to get started.', 'contentseer' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
 							<?php esc_html_e( 'Go to Settings', 'contentseer' ); ?>
 						</a>
 					</p>
@@ -130,17 +162,20 @@ class Admin {
 		$analyze_enabled = get_option( 'contentseer_enable_analyze_feature', true );
 		$create_enabled  = get_option( 'contentseer_enable_create_feature', true );
 		$contentseer_id  = get_option( 'contentseer_id', '' );
+		$api_key = get_option( 'contentseer_api_key', '' );
+		$api_secret = get_option( 'contentseer_api_secret', '' );
+		$is_connected = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'ContentSeer Dashboard', 'contentseer' ); ?></h1>
 			
-			<?php if ( empty( $contentseer_id ) ) : ?>
+			<?php if ( ! $is_connected ) : ?>
 				<div class="notice notice-warning">
 					<p>
-						<strong><?php esc_html_e( 'Site not connected', 'contentseer' ); ?></strong><br>
-						<?php esc_html_e( 'Your site is not yet connected to ContentSeer. Please configure your ContentSeer Site ID in the settings.', 'contentseer' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
-							<?php esc_html_e( 'Configure Settings', 'contentseer' ); ?>
+						<strong><?php esc_html_e( 'Setup Required', 'contentseer' ); ?></strong><br>
+						<?php esc_html_e( 'Your site is not yet connected to ContentSeer. Please request access to get started with all features.', 'contentseer' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+							<?php esc_html_e( 'Request Access', 'contentseer' ); ?>
 						</a>
 					</p>
 				</div>
@@ -168,17 +203,33 @@ class Admin {
 							<?php esc_html_e( 'Manage Personas', 'contentseer' ); ?>
 						</a>
 						
-						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-secondary">
+						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-secondary">
 							<?php esc_html_e( 'Settings', 'contentseer' ); ?>
 						</a>
 					</div>
 				</div>
 
-				<!-- Feature Status Card -->
+				<!-- Connection Status Card -->
 				<div class="card">
-					<h2><?php esc_html_e( 'Feature Status', 'contentseer' ); ?></h2>
+					<h2><?php esc_html_e( 'Connection Status', 'contentseer' ); ?></h2>
 					<table class="widefat">
 						<tbody>
+							<tr>
+								<td><?php esc_html_e( 'ContentSeer Connection', 'contentseer' ); ?></td>
+								<td>
+									<?php if ( $is_connected ) : ?>
+										<span style="color: #46b450; font-weight: 600;"><?php esc_html_e( 'Connected', 'contentseer' ); ?></span>
+									<?php else : ?>
+										<span style="color: #dc3232; font-weight: 600;"><?php esc_html_e( 'Not Connected', 'contentseer' ); ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<?php if ( $is_connected ) : ?>
+								<tr>
+									<td><?php esc_html_e( 'Site ID', 'contentseer' ); ?></td>
+									<td><code><?php echo esc_html( $contentseer_id ); ?></code></td>
+								</tr>
+							<?php endif; ?>
 							<tr>
 								<td><?php esc_html_e( 'Content Analysis', 'contentseer' ); ?></td>
 								<td>
@@ -196,16 +247,6 @@ class Admin {
 										<span style="color: #46b450; font-weight: 600;"><?php esc_html_e( 'Enabled', 'contentseer' ); ?></span>
 									<?php else : ?>
 										<span style="color: #dc3232; font-weight: 600;"><?php esc_html_e( 'Disabled', 'contentseer' ); ?></span>
-									<?php endif; ?>
-								</td>
-							</tr>
-							<tr>
-								<td><?php esc_html_e( 'Site Connection', 'contentseer' ); ?></td>
-								<td>
-									<?php if ( ! empty( $contentseer_id ) ) : ?>
-										<span style="color: #46b450; font-weight: 600;"><?php esc_html_e( 'Connected', 'contentseer' ); ?></span>
-									<?php else : ?>
-										<span style="color: #dc3232; font-weight: 600;"><?php esc_html_e( 'Not Connected', 'contentseer' ); ?></span>
 									<?php endif; ?>
 								</td>
 							</tr>
