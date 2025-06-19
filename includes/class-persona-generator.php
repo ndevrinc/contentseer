@@ -244,9 +244,9 @@ class Persona_Generator {
 	 */
 	public function add_generate_button() {
 		// Check if API key is configured
-		$api_key = get_option( 'contentseer_perplexity_api_key' );
+		$api_key         = get_option( 'contentseer_perplexity_api_key' );
 		$button_disabled = empty( $api_key ) ? 'disabled' : '';
-		$button_title = empty( $api_key ) ? 'Configure Perplexity API key in ContentSeer Settings first' : '';
+		$button_title    = empty( $api_key ) ? 'Configure Perplexity API key in ContentSeer Settings first' : '';
 		?>
 		<div class="form-wrap">
 			<h2><?php esc_html_e( 'Generate Personas', 'contentseer' ); ?></h2>

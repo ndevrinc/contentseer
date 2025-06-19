@@ -36,18 +36,18 @@ class Admin {
 		}
 
 		$contentseer_id = get_option( 'contentseer_id', '' );
-		$api_key = get_option( 'contentseer_api_key', '' );
-		$api_secret = get_option( 'contentseer_api_secret', '' );
-		
+		$api_key        = get_option( 'contentseer_api_key', '' );
+		$api_secret     = get_option( 'contentseer_api_secret', '' );
+
 		$is_connected = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
-		
-		if ( ! $is_connected && $screen->id !== 'settings_page_contentseer' ) {
+
+		if ( ! $is_connected && 'settings_page_contentseer' !== $screen->id ) {
 			?>
 			<div class="notice notice-warning">
 				<p>
 					<strong><?php esc_html_e( 'ContentSeer Setup Required', 'contentseer' ); ?></strong><br>
 					<?php esc_html_e( 'Your site is not yet connected to ContentSeer. Please request access to get started.', 'contentseer' ); ?>
-					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+					<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
 						<?php esc_html_e( 'Request Access', 'contentseer' ); ?>
 					</a>
 				</p>
@@ -75,7 +75,7 @@ class Admin {
 			'ContentSeer',           // Menu title
 			'edit_posts',            // Capability
 			'contentseer',           // Menu slug
-			array( $this, 'render_default_page' ), // Callback function
+			array( $this, 'render_dashboard_page' ), // Callback function
 			'dashicons-chart-bar',   // Icon
 			30                       // Position
 		);
@@ -86,7 +86,7 @@ class Admin {
 			'Dashboard',            // Page title
 			'Dashboard',            // Menu title
 			'edit_posts',           // Capability
-			'contentseer-dashboard', // Menu slug
+			'contentseer', // Menu slug
 			array( $this, 'render_dashboard_page' ) // Callback function
 		);
 
@@ -97,7 +97,7 @@ class Admin {
 				'Analyze',              // Page title
 				'Analyze',              // Menu title
 				'edit_posts',           // Capability
-				'contentseer',          // Menu slug (same as parent to make it the default page)
+				'analyze',          // Menu slug (same as parent to make it the default page)
 				array( $this, 'render_analysis_page' ) // Callback function
 			);
 		}
@@ -145,7 +145,7 @@ class Admin {
 					<p>
 						<strong><?php esc_html_e( 'No features enabled', 'contentseer' ); ?></strong><br>
 						<?php esc_html_e( 'Please enable at least one ContentSeer feature in the settings to get started.', 'contentseer' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
 							<?php esc_html_e( 'Go to Settings', 'contentseer' ); ?>
 						</a>
 					</p>
@@ -162,9 +162,9 @@ class Admin {
 		$analyze_enabled = get_option( 'contentseer_enable_analyze_feature', true );
 		$create_enabled  = get_option( 'contentseer_enable_create_feature', true );
 		$contentseer_id  = get_option( 'contentseer_id', '' );
-		$api_key = get_option( 'contentseer_api_key', '' );
-		$api_secret = get_option( 'contentseer_api_secret', '' );
-		$is_connected = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
+		$api_key         = get_option( 'contentseer_api_key', '' );
+		$api_secret      = get_option( 'contentseer_api_secret', '' );
+		$is_connected    = ! empty( $contentseer_id ) && ! empty( $api_key ) && ! empty( $api_secret );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'ContentSeer Dashboard', 'contentseer' ); ?></h1>
@@ -174,7 +174,7 @@ class Admin {
 					<p>
 						<strong><?php esc_html_e( 'Setup Required', 'contentseer' ); ?></strong><br>
 						<?php esc_html_e( 'Your site is not yet connected to ContentSeer. Please request access to get started with all features.', 'contentseer' ); ?>
-						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-primary" style="margin-left: 10px;">
 							<?php esc_html_e( 'Request Access', 'contentseer' ); ?>
 						</a>
 					</p>
@@ -203,7 +203,7 @@ class Admin {
 							<?php esc_html_e( 'Manage Personas', 'contentseer' ); ?>
 						</a>
 						
-						<a href="<?php echo esc_url( admin_url( 'options-general.php?page=contentseer' ) ); ?>" class="button button-secondary">
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=contentseer-settings' ) ); ?>" class="button button-secondary">
 							<?php esc_html_e( 'Settings', 'contentseer' ); ?>
 						</a>
 					</div>
@@ -258,9 +258,9 @@ class Admin {
 				<div class="card">
 					<h2><?php esc_html_e( 'Configuration Status', 'contentseer' ); ?></h2>
 					<?php
-					$perplexity_key = get_option( 'contentseer_perplexity_api_key', '' );
-					$topics_webhook = get_option( 'contentseer_topics_webhook_url', '' );
-					$analysis_webhook = get_option( 'contentseer_content_analysis_webhook_url', '' );
+					$perplexity_key     = get_option( 'contentseer_perplexity_api_key', '' );
+					$topics_webhook     = get_option( 'contentseer_topics_webhook_url', '' );
+					$analysis_webhook   = get_option( 'contentseer_content_analysis_webhook_url', '' );
 					$generation_webhook = get_option( 'contentseer_content_generation_webhook_url', '' );
 					?>
 					<table class="widefat">
@@ -328,11 +328,12 @@ class Admin {
 						if ( ! empty( $recent_analysis ) ) :
 							?>
 							<div style="max-height: 200px; overflow-y: auto;">
-								<?php foreach ( $recent_analysis as $analysis ) : 
+								<?php
+								foreach ( $recent_analysis as $analysis ) :
 									$analysis_data = maybe_unserialize( $analysis->meta_value );
-									$score = isset( $analysis_data['overall_score'] ) ? $analysis_data['overall_score'] : 0;
-									$score_color = $score >= 80 ? '#46b450' : ( $score >= 60 ? '#ffb900' : '#dc3232' );
-								?>
+									$score         = isset( $analysis_data['overall_score'] ) ? $analysis_data['overall_score'] : 0;
+									$score_color   = $score >= 80 ? '#46b450' : ( $score >= 60 ? '#ffb900' : '#dc3232' );
+									?>
 									<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
 										<div style="flex: 1; min-width: 0;">
 											<div style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">

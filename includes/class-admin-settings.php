@@ -21,7 +21,6 @@ class Admin_Settings {
 	 * Initialize admin-specific hooks.
 	 */
 	private function init_hooks() {
-		add_action( 'admin_menu', array( $this, 'add_settings_page' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_webhook_settings' ) );
 		add_action( 'admin_init', array( $this, 'create_default_feature_settings' ) );
@@ -35,10 +34,8 @@ class Admin_Settings {
 	 * Enqueue scripts for settings page
 	 */
 	public function enqueue_settings_scripts( $hook ) {
-		// Only load on ContentSeer settings page
-		if ( 'settings_page_contentseer' !== $hook ) {
-			return;
-		}
+		// Enqueue jQuery if not already loaded
+		wp_enqueue_script( 'jquery' );
 
 		wp_enqueue_script(
 			'contentseer-settings',
@@ -62,35 +59,56 @@ class Admin_Settings {
 	 * Handle access request AJAX
 	 */
 	public function handle_access_request() {
-		check_ajax_referer( 'contentseer-settings', 'nonce' );
+		// Check if nonce is present
+		if ( ! isset( $_POST['nonce'] ) ) {
+			error_log( 'ContentSeer: No nonce provided' );
+			wp_send_json_error( 'No nonce provided' );
+			return;
+		}
+
+		// Verify nonce
+		if ( ! wp_verify_nonce( $_POST['nonce'], 'contentseer-settings' ) ) {
+			error_log( 'ContentSeer: Nonce verification failed' );
+			wp_send_json_error( 'Nonce verification failed' );
+			return;
+		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
+			error_log( 'ContentSeer: Permission denied' );
 			wp_send_json_error( 'Permission denied' );
 			return;
 		}
 
-		$site_name = sanitize_text_field( $_POST['site_name'] );
+		$site_name   = sanitize_text_field( $_POST['site_name'] );
 		$admin_email = sanitize_email( $_POST['admin_email'] );
-		$site_url = home_url();
+		$site_url    = home_url();
 
 		if ( empty( $site_name ) || empty( $admin_email ) ) {
+			error_log( 'ContentSeer: Missing required fields' );
 			wp_send_json_error( 'Site name and admin email are required' );
+			return;
+		}
+
+		$webhook_url = get_option( 'contentseer_request_access_webhook_url' );
+		if ( empty( $webhook_url ) ) {
+			error_log( 'ContentSeer: Make.com webhook URL not configured' );
+			wp_send_json_error( 'Make.com webhook URL is not configured' );
 			return;
 		}
 
 		// Prepare request data
 		$request_data = array(
-			'site_name'    => $site_name,
-			'site_url'     => $site_url,
-			'admin_email'  => $admin_email,
-			'wp_version'   => get_bloginfo( 'version' ),
+			'site_name'      => $site_name,
+			'site_url'       => $site_url,
+			'admin_email'    => $admin_email,
+			'wp_version'     => get_bloginfo( 'version' ),
 			'plugin_version' => CONTENTSEER_VERSION,
-			'request_type' => 'access_request',
+			'request_type'   => 'access_request',
 		);
 
 		// Send request to ContentSeer dashboard API
 		$response = wp_remote_post(
-			'https://dashboard.contentseer.io/api/v1/sites/request-access',
+			$webhook_url,
 			array(
 				'headers' => array(
 					'Content-Type' => 'application/json',
@@ -102,15 +120,16 @@ class Admin_Settings {
 		);
 
 		if ( is_wp_error( $response ) ) {
+			error_log( 'ContentSeer: API request failed - ' . $response->get_error_message() );
 			wp_send_json_error( 'Failed to connect to ContentSeer: ' . $response->get_error_message() );
 			return;
 		}
 
 		$response_code = wp_remote_retrieve_response_code( $response );
-		$body = wp_remote_retrieve_body( $response );
-		$data = json_decode( $body, true );
+		$body          = wp_remote_retrieve_body( $response );
+		$data          = json_decode( $body, true );
 
-		if ( $response_code !== 200 ) {
+		if ( 200 !== $response_code ) {
 			$error_message = isset( $data['message'] ) ? $data['message'] : 'Unknown error occurred';
 			wp_send_json_error( 'Request failed: ' . $error_message );
 			return;
@@ -125,16 +144,16 @@ class Admin_Settings {
 		// If successful, save the credentials
 		if ( isset( $data['credentials'] ) ) {
 			$credentials = $data['credentials'];
-			
+
 			// Update all the settings with the received credentials
 			update_option( 'contentseer_id', sanitize_text_field( $credentials['site_id'] ) );
 			update_option( 'contentseer_api_key', sanitize_text_field( $credentials['api_key'] ) );
 			update_option( 'contentseer_api_secret', sanitize_text_field( $credentials['api_secret'] ) );
-			
+
 			// Update webhook URLs if provided
 			if ( isset( $credentials['webhooks'] ) ) {
 				$webhooks = $credentials['webhooks'];
-				
+
 				if ( isset( $webhooks['topics'] ) ) {
 					update_option( 'contentseer_topics_webhook_url', esc_url_raw( $webhooks['topics'] ) );
 				}
@@ -149,6 +168,9 @@ class Admin_Settings {
 				}
 				if ( isset( $webhooks['content_sync'] ) ) {
 					update_option( 'contentseer_content_sync_webhook_url', esc_url_raw( $webhooks['content_sync'] ) );
+				}
+				if ( isset( $webhooks['request_access'] ) ) {
+					update_option( 'contentseer_request_access_webhook_url', esc_url_raw( $webhooks['request_access'] ) );
 				}
 			}
 
@@ -179,6 +201,7 @@ class Admin_Settings {
 			'contentseer_content_generation_webhook_url' => '',
 			'contentseer_content_analysis_webhook_url'   => '',
 			'contentseer_content_sync_webhook_url'       => '',
+			'contentseer_request_access_webhook_url'     => '',
 		);
 
 		foreach ( $default_webhooks as $option_name => $default_value ) {
@@ -235,19 +258,6 @@ class Admin_Settings {
 				add_option( $option_name, $default_value );
 			}
 		}
-	}
-
-	/**
-	 * Add a settings page to the WordPress admin menu.
-	 */
-	public function add_settings_page() {
-		add_options_page(
-			'ContentSeer Settings', // Page title
-			'ContentSeer',          // Menu title
-			'manage_options',        // Capability
-			'contentseer',          // Menu slug
-			array( $this, 'render_settings_page' ) // Callback function
-		);
 	}
 
 	/**
@@ -335,6 +345,15 @@ class Admin_Settings {
 		register_setting(
 			'contentseer_settings',
 			'contentseer_content_sync_webhook_url',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'esc_url_raw',
+			)
+		);
+
+		register_setting(
+			'contentseer_settings',
+			'contentseer_request_access_webhook_url',
 			array(
 				'type'              => 'string',
 				'sanitize_callback' => 'esc_url_raw',
@@ -475,6 +494,14 @@ class Admin_Settings {
 			'contentseer',
 			'contentseer_webhooks_section'
 		);
+
+		add_settings_field(
+			'contentseer_request_access_webhook_url',
+			'Request Access Webhook URL',
+			array( $this, 'render_request_access_webhook_field' ),
+			'contentseer',
+			'contentseer_webhooks_section'
+		);
 	}
 
 	/**
@@ -590,6 +617,15 @@ class Admin_Settings {
 		$webhook_url = get_option( 'contentseer_content_sync_webhook_url', '' );
 		echo '<input type="url" name="contentseer_content_sync_webhook_url" value="' . esc_attr( $webhook_url ) . '" class="regular-text" />';
 		echo '<p class="description">Enter the Make.com webhook URL for syncing content.</p>';
+	}
+
+	/**
+	 * Render the request access webhook field.
+	 */
+	public function render_request_access_webhook_field() {
+		$webhook_url = get_option( 'contentseer_request_access_webhook_url', '' );
+		echo '<input type="url" name="contentseer_request_access_webhook_url" value="' . esc_attr( $webhook_url ) . '" class="regular-text" />';
+		echo '<p class="description">Enter the Make.com webhook URL for requesting access.</p>';
 	}
 
 	/**
@@ -746,32 +782,6 @@ class Admin_Settings {
 				
 				<h3><?php esc_html_e( 'Authentication', 'contentseer' ); ?></h3>
 				<p><?php esc_html_e( 'Use Basic Authentication with the API credentials above when making requests to these webhooks.', 'contentseer' ); ?></p>
-				
-				<h3><?php esc_html_e( 'Expected Payload Formats', 'contentseer' ); ?></h3>
-				
-				<h4><?php esc_html_e( 'Topics Webhook:', 'contentseer' ); ?></h4>
-				<pre style="background: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto;">
-{
-	"persona_id": 123,
-	"topics": [
-	"AI in Healthcare",
-	"Sustainable Technology",
-	"Remote Work Trends"
-	]
-}
-				</pre>
-				
-				<h4><?php esc_html_e( 'Blog Titles Webhook:', 'contentseer' ); ?></h4>
-				<pre style="background: #f1f1f1; padding: 10px; border-radius: 4px; overflow-x: auto;">
-{
-	"topic_id": 456,
-	"blog_titles": [
-	"10 Ways AI is Revolutionizing Healthcare",
-	"The Future of Medical Diagnosis with AI",
-	"How Machine Learning is Saving Lives"
-	]
-}
-				</pre>
 			</div>
 
 			<form method="post" action="options.php">
@@ -782,58 +792,6 @@ class Admin_Settings {
 				?>
 			</form>
 		</div>
-		
-		<script>
-		jQuery(document).ready(function($) {
-			$('#request-access-btn').on('click', function() {
-				var $button = $(this);
-				var $status = $('#access-request-status');
-				
-				var siteName = $('#site_name').val().trim();
-				var adminEmail = $('#admin_email').val().trim();
-				
-				if (!siteName || !adminEmail) {
-					$status.html('<div class="notice notice-error inline"><p>Please fill in all required fields.</p></div>').show();
-					return;
-				}
-				
-				$button.prop('disabled', true).text('Requesting Access...');
-				$status.html('<div class="notice notice-info inline"><p>Sending request to ContentSeer...</p></div>').show();
-				
-				$.ajax({
-					url: contentSeerSettings.ajaxurl,
-					method: 'POST',
-					data: {
-						action: 'contentseer_request_access',
-						site_name: siteName,
-						admin_email: adminEmail,
-						nonce: contentSeerSettings.nonce
-					},
-					success: function(response) {
-						if (response.success) {
-							if (response.data.pending) {
-								$status.html('<div class="notice notice-info inline"><p>' + response.data.message + '</p></div>');
-							} else {
-								$status.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
-								// Reload the page after a short delay to show the updated connection status
-								setTimeout(function() {
-									location.reload();
-								}, 2000);
-							}
-						} else {
-							$status.html('<div class="notice notice-error inline"><p>Error: ' + response.data + '</p></div>');
-						}
-					},
-					error: function() {
-						$status.html('<div class="notice notice-error inline"><p>Failed to send request. Please try again.</p></div>');
-					},
-					complete: function() {
-						$button.prop('disabled', false).text('Request Access to ContentSeer');
-					}
-				});
-			});
-		});
-		</script>
 		<?php
 	}
 }

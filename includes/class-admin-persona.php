@@ -28,7 +28,7 @@ class Admin_Persona {
 		add_action( 'created_contentseer_personas', array( $this, 'save_persona_fields' ) );
 		add_action( 'edited_contentseer_personas', array( $this, 'save_persona_fields' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_persona_scripts' ) );
-		
+
 		// Add generate personas section
 		add_action( 'contentseer_personas_pre_add_form', array( $this, 'add_generate_personas_section' ) );
 	}
