@@ -122,8 +122,7 @@ class Admin_Generate {
 			// Check if topic already exists for this persona
 			$existing = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT id FROM %s WHERE persona_id = %d AND topic_text = %s AND status = 'active'",
-					$table_name,
+					"SELECT id FROM $table_name WHERE persona_id = %d AND topic_text = %s AND status = 'active'",
 					$data['persona_id'],
 					$topic
 				)
@@ -178,8 +177,7 @@ class Admin_Generate {
 			// Check if title already exists for this topic
 			$existing = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT id FROM %s WHERE topic_id = %d AND title_text = %s AND status = 'active'",
-					$table_name,
+					"SELECT id FROM $table_name WHERE topic_id = %d AND title_text = %s AND status = 'active'",
 					$data['topic_id'],
 					$title
 				)
@@ -293,13 +291,7 @@ class Admin_Generate {
 			return;
 		}
 
-		$body     = wp_remote_retrieve_body( $response );
-		$body_arr = explode( '```json', $body );
-		if ( count( $body_arr ) < 2 ) {
-			wp_send_json_error( 'Invalid response format from topics service' );
-			return;
-		}
-		$body = str_replace( '```', '', $body_arr[1] );
+		$body = wp_remote_retrieve_body( $response );
 		$data = json_decode( $body, true );
 
 		if ( ! $data || ! isset( $data['topics'] ) ) {
@@ -320,8 +312,7 @@ class Admin_Generate {
 			// Check if topic already exists for this persona
 			$existing = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT id FROM %s WHERE persona_id = %d AND topic_text = %s AND status = 'active'",
-					$table_name,
+					"SELECT id FROM $table_name WHERE persona_id = %d AND topic_text = %s AND status = 'active'",
 					$persona_id,
 					$topic
 				)
@@ -377,11 +368,11 @@ class Admin_Generate {
 		// Check if topic already exists for this persona
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
-				'SELECT topic_text, persona_id FROM %s WHERE id = %d',
-				$table_name,
+				"SELECT topic_text, persona_id FROM $table_name WHERE id = %d",
 				$topic_id
 			)
 		);
+
 		if ( ! $results || count( $results ) === 0 ) {
 			wp_send_json_error( 'Invalid topic selected' );
 			return;
@@ -446,8 +437,7 @@ class Admin_Generate {
 			// Check if title already exists for this topic
 			$existing = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT id FROM %s WHERE topic_id = %d AND title_text = %s AND status = 'active'",
-					$table_name,
+					"SELECT id FROM $table_name WHERE topic_id = %d AND title_text = %s AND status = 'active'",
 					$topic_id,
 					$title
 				)

@@ -278,8 +278,7 @@ class API {
 			$topics_table = $wpdb->prefix . 'contentseer_topics';
 			$wpdb->query(
 				$wpdb->prepare(
-					'UPDATE %s SET used_date = %s, used_post_id = %d WHERE topic_text = %s AND used_date IS NULL LIMIT 1',
-					$topics_table,
+					"UPDATE $topics_table SET used_date = %s, used_post_id = %d WHERE topic_text = %s AND used_date IS NULL LIMIT 1",
 					current_time( 'mysql' ),
 					$post_id,
 					$topic_text
@@ -290,8 +289,7 @@ class API {
 			$blog_titles_table = $wpdb->prefix . 'contentseer_blog_titles';
 			$wpdb->query(
 				$wpdb->prepare(
-					'UPDATE %s SET used_date = %s, used_post_id = %d WHERE title_text = %s AND used_date IS NULL LIMIT 1',
-					$blog_titles_table,
+					"UPDATE $blog_title SET used_date = %s, used_post_id = %d WHERE title_text = %s AND used_date IS NULL LIMIT 1",
 					current_time( 'mysql' ),
 					$post_id,
 					$blog_title
